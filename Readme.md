@@ -87,7 +87,7 @@ public class Test {
         //FutureTask是一个将来会产生返回值的Task,它实现了RunnableFuture接口 RunnableFuture接口又继承了Runnable,Future接口
         //所以FutureTask既能当作Runnable运行 又能像Future一样持有返回值 FutureTask既是一个Future可以接收对象 又是一个task可以被执行
         FutureTask<String> futureTask = new FutureTask<>(new MyCall());
-        Thread thread = new Thread(futureTask);
+        Thread thread = new Thread(futureTask, "futureTask线程");
         thread.start();
         System.out.println(futureTask.get()); //get()这里依旧阻塞当前线程到MyCall线程执行完拿到返回值为止
 
@@ -106,4 +106,44 @@ class MyCall implements Callable<String> {
 ```
 
 # 3. 线程的状态
+##### 3.1 Java线程的6种状态:
+1. NEW: 线程刚创建 还没有start() 启动
+2. RUNNABLE(包含ready和running): 可运行状态, 线程已经start()了, 此时可以被操作系统调度执行, 但不一定会立即执行(可能还没有分配到CPU时间片)
+3. WAITING: 线程挂起, 等待被唤醒, 需要被其他线程用notify唤醒
+4. TIME_WAITING: 线程隔一段时间自动唤醒, 比如Thread.sleep()方法
+5. BLOCKED: 线程阻塞中, 等待操作系统唤醒并尝试获取锁, 比如synchronized
+6. TERMINATED: 线程执行完毕, 已经退出
 
+##### 3.2 线程状态迁移简介
+1. 一个线程刚刚被new出来: `NEW`
+2. 线程调用了它的start()方法后, 变成`RUNNABLE`, 此时线程状态可能是`RUNNING`, 可能是`READY`
+3. 正在RUNNING的线程调用了yield方法 -> 放弃CPU, 变成READY状态
+4. 争抢锁失败的线程进入`BLCOKED`状态, 等待其他线程释放锁后, 操作系统唤醒它, 抢到锁的线程进入`READY`状态 准备运行
+5. 进入`WAITING`的线程挂起, 不消耗CPU资源, 必须等待别人的唤醒 notify
+6. `TIME_WAITING`, 不放弃锁, 线程休眠一段时间后自动醒来恢复就绪态`READY`
+7. 线程执行结束后变成`TERMINATED`状态
+
+##### 3.3 Lock.lock()和synchronized的区别
+Lock.lock()一般用的是JUC下的ReentrantLock, JUC下的锁的底层实现基本都是volatile + CAS, 是一种忙等待的锁 (自旋就是一种忙等待的锁, 线程没有获得锁执行代码逻辑, 但是还是在占用CPU, 尝试获得锁), 争抢锁失败的线程进入BLOCKED状态
+
+Synchronized争抢锁失败的线程进入BLOCKED状态
+
+##### 3.4 总结
+线程状态: NEW、RUNNABLE、TERMINATED、BLCOKED (synchronized锁 线程是要经过操作系统的调度的), WAITING、TIME_WAITING
+
+```markdown
+线程在Java中有以下几种状态：
+1. NEW（新建）：线程被创建但尚未启动。
+2. RUNNABLE（可运行）：线程正在Java虚拟机中执行，但它可能在等待操作系统的资源。
+3. BLOCKED（阻塞）：线程在等待监视器锁，以便进入同步块/方法。线程在尝试获取锁时被阻塞。
+4. WAITING（等待）：线程在等待另一个线程执行特定的动作（如通知或中断）。线程调用Object.wait()、Thread.join()或LockSupport.park()时进入此状态。
+5. TIMED_WAITING（计时等待）：线程在等待另一个线程执行动作，但有时间限制。线程调用Thread.sleep()、Object.wait(long timeout)、Thread.join(long millis)等方法时进入此状态。
+6. TERMINATED（终止）：线程已完成执行。
+
+WAITING和BLOCKED的区别：
+- WAITING：线程在等待某个条件的满足或等待被唤醒。它不消耗CPU资源。常见的进入方式是调用Object.wait()、Thread.join()或LockSupport.park()。需要其他线程通过notify()、notifyAll()或unpark()来唤醒。
+- BLOCKED：线程在等待获取一个锁。线程在尝试进入同步块/方法时，如果锁被其他线程持有，它会进入BLOCKED状态。线程在锁被释放后会自动被唤醒并重新参与锁的争抢。无需显式的notify()。
+
+```
+
+> WAITING和BLOCKED状态的线程都不消耗CPU资源。这两种状态的线程都处于等待状态，不会主动占用CPU时间片。
